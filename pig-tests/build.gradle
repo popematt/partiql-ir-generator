@@ -1,5 +1,3 @@
-import java.nio.file.Paths
-
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
@@ -23,11 +21,31 @@ plugins {
     // https://docs.gradle.org/5.0/userguide/publishing_maven.html#header
     id 'org.jetbrains.kotlin.jvm'
     id 'signing'
+    id 'pig-gradle-plugin'
 }
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
     kotlinOptions {
         jvmTarget = "1.8"
+    }
+}
+
+// remove after pig-example is created
+def PIG_OUTPUT_DIR = file("./src/org/partiql/pig/tests/generated/").absolutePath
+
+pig {
+    target = "kotlin"
+    namespace = "org.partiql.pig.tests.generated"
+    // remove after pig-example is created
+    outputDir = PIG_OUTPUT_DIR
+}
+
+// remove after https://github.com/partiql/partiql-ir-generator/pull/128
+sourceSets {
+    main {
+        pig {
+            srcDir "type-domains"
+        }
     }
 }
 
@@ -43,53 +61,15 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.6.2'
 }
 
-final PIG_INPUT_DIR = './type-domains'
-final PIG_OUTPUT_DIR = './src/org/partiql/pig/tests/generated/'
-final PIG_TARGET_PACKAGE = 'org.partiql.pig.tests.generated'
-final universesToGenerate = ['toy-lang', 'sample-universe', 'partiql-basic']
-
-// the universe-specific tasks registered below will be added as dependencies of this task
-// provides a simplified way to ask pig to generate all the universes, i.e. ./gradlew pig_all
-task pig_all {
-    group 'pig'
-}
-
-// Make sure all pig tasks have completed before the kotlin code is compiled.
-compileKotlin.dependsOn pig_all
-
-universesToGenerate.each({ u ->
-    tasks.register("pig-generate-${u}") { generateTask ->
-        group 'pig'
-        def pathToPig = new File(projectDir, '../pig/build/install/pig/bin/pig').getCanonicalPath().toString()
-        def pathToUniverseFile = Paths.get(projectDir.toString(), PIG_INPUT_DIR, "${u}.ion")
-
-        tasks.findByName("pig_all").dependsOn generateTask
-
-        // Make sure the :pig:installDist task has completed before the pig tasks are generated
-        // this installs the binary and gradle-generated launch script to the build directory
-        // so it is accessible to the `exec` task below.
-        dependsOn project(":pig").tasks.installDist
-
-        doLast {
-            exec {
-                workingDir projectDir
-                commandLine pathToPig, '-u', pathToUniverseFile, '-t', 'kotlin', '-n', PIG_TARGET_PACKAGE, '-d', PIG_OUTPUT_DIR
-            }
-        }
-    }
-})
-
-// This task removes any *.generated.kt files left behind from previous builds runs.  Without this, there is nothing to
-// remove generated code for deleted and renamed PIG domains, which could be very confusing.
-tasks.register('clean-pig-generated-files', Delete) {
+// remove once pig-example is created
+tasks.register('pigClean', Delete) {
     group 'pig'
     delete fileTree(PIG_OUTPUT_DIR).matching {
         include "*.generated.kt"
     }
 }
 
-pig_all.shouldRunAfter('clean-pig-generated-files')
-
+// remove once pig-example is created
 ktlint {
     filter {
         exclude("**/*.generated.kt")
